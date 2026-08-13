@@ -1,6 +1,7 @@
 import { randomBytes, randomInt } from 'node:crypto'
 import { Bonjour } from 'bonjour-service'
 import * as adb from './adb'
+import * as deviceManager from './device-manager'
 
 export type PairingStep = 'ready' | 'browsing' | 'paired' | 'connecting' | 'connected' | 'failed' | 'cancelled' | 'timeout'
 
@@ -133,10 +134,12 @@ export function createPairingSession(): PairingSession {
               ip: host,
               port: targetPort,
             }
+            deviceManager.storeConnectingDevice(serial, host)
             const props = await adb.getProperties(serial).catch(() => null)
             if (props) {
               session.device.name = props['ro.product.marketname'] || props['ro.product.model'] || host
             }
+            deviceManager.refreshStoredDevice(serial)
           } catch (err) {
             if (!settled) {
               session.status = 'failed'
@@ -221,7 +224,9 @@ export async function pairManual(address: string, code: string): Promise<{ seria
   if (!host || !port) throw Errors.invalid('Invalid address.')
   const out = await runPair(host, port, code)
   const serial = `${host}:${port}`
+  deviceManager.storeConnectingDevice(serial, host)
   const res = await adb.connectDevice(serial)
+  deviceManager.refreshStoredDevice(serial)
   return { serial, status: res.state }
 }
 

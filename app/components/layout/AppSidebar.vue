@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { AppWindow, Cpu, FolderOpen, LayoutGrid, MonitorSmartphone, Plug, ScrollText, Server, Settings, SlidersHorizontal, SquareTerminal } from 'lucide-vue-next'
+import { AppWindow, Cpu, FolderOpen, LayoutGrid, MonitorSmartphone, Plug, ScrollText, Server, Settings, SlidersHorizontal, SquareTerminal, X } from 'lucide-vue-next'
 import type { DeviceInfo } from '../../../shared/types'
 
 const props = defineProps<{
   devices: DeviceInfo[]
   selectedSerial: string | null
   collapsed: boolean
+  mobileOpen: boolean
 }>()
 
 const emit = defineEmits<{
   toggle: []
   select: [serial: string]
+  closeMobile: []
 }>()
 
 const route = useRoute()
@@ -51,21 +53,41 @@ function isActive(to: string) {
 </script>
 
 <template>
+  <!-- Mobile backdrop -->
+  <Teleport to="body">
+    <div
+      v-if="mobileOpen"
+      class="fixed inset-0 z-[80] bg-black/60 md:hidden"
+      @click="emit('closeMobile')"
+    />
+  </Teleport>
+
   <aside
     :class="[
-      'flex h-full flex-col border-r border-neutral-800 bg-neutral-950/90 transition-[width] duration-150',
-      collapsed ? 'w-14' : 'w-60',
+      'flex h-full flex-col border-r border-neutral-800 bg-neutral-950/90 transition-[width,transform] duration-150',
+      'fixed left-0 top-0 z-[90] md:static',
+      'md:translate-x-0',
+      mobileOpen ? 'translate-x-0 shadow-2xl shadow-black/60' : '-translate-x-full',
+      collapsed ? 'md:w-14' : 'md:w-60',
+      'w-60',
     ]"
   >
     <div class="flex h-14 shrink-0 items-center gap-2 border-b border-neutral-800 px-3">
       <button
         class="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent"
         title="Overview"
-        @click="router.push('/')"
+        @click="router.push('/'); emit('closeMobile')"
       >
         <LayoutGrid class="h-4 w-4" />
       </button>
       <span v-if="!collapsed" class="truncate text-sm font-semibold tracking-wide text-neutral-100">ADB CONTROL</span>
+      <button
+        class="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:text-neutral-200 md:hidden"
+        title="Close menu"
+        @click="emit('closeMobile')"
+      >
+        <X class="h-4 w-4" />
+      </button>
     </div>
 
     <div class="flex-1 overflow-y-auto overflow-x-hidden py-3">
@@ -73,7 +95,7 @@ function isActive(to: string) {
         <button
           class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-300 transition-colors hover:bg-neutral-900 hover:text-white"
           :class="{ 'bg-neutral-900 text-white': isActive('/') }"
-          @click="router.push('/')"
+          @click="router.push('/'); emit('closeMobile')"
         >
           <LayoutGrid class="h-4 w-4 shrink-0 text-neutral-500" />
           <span v-if="!collapsed">Overview</span>
@@ -82,7 +104,7 @@ function isActive(to: string) {
 
       <div v-if="!collapsed" class="mb-2 flex items-center justify-between px-3">
         <span class="text-[11px] font-medium tracking-widest text-neutral-500">DEVICES</span>
-        <button class="text-neutral-500 hover:text-neutral-300" title="Add device" @click="router.push('/devices?add=1')">
+        <button class="text-neutral-500 hover:text-neutral-300" title="Add device" @click="router.push('/devices?add=1'); emit('closeMobile')">
           <Plug class="h-3.5 w-3.5" />
         </button>
       </div>
@@ -113,7 +135,7 @@ function isActive(to: string) {
             :key="item.label"
             class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-neutral-900"
             :class="isActive(item.to) ? 'bg-neutral-900 text-white' : 'text-neutral-300'"
-            @click="router.push(item.to)"
+            @click="router.push(item.to); emit('closeMobile')"
           >
             <component :is="item.icon" class="h-4 w-4 shrink-0 text-neutral-500" />
             <span v-if="!collapsed">{{ item.label }}</span>
@@ -126,7 +148,7 @@ function isActive(to: string) {
       <button
         class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-neutral-300 hover:bg-neutral-900 hover:text-white"
         :class="{ 'bg-neutral-900 text-white': isActive('/settings') }"
-        @click="router.push('/settings')"
+        @click="router.push('/settings'); emit('closeMobile')"
       >
         <Settings class="h-4 w-4 shrink-0 text-neutral-500" />
         <span v-if="!collapsed">Settings</span>

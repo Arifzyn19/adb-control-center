@@ -102,6 +102,12 @@ function guessConnectionType(serial: string): 'wireless' | 'usb' | 'emulator' | 
 async function gatherInfo(serial: string, state: string): Promise<DeviceInfo> {
   const existing = devices.get(serial)
   const props: Record<string, string> = {}
+  const [battery, mem, storage, ip] = await Promise.all([
+    collectBattery(serial),
+    collectMemory(serial),
+    collectStorage(serial),
+    collectIp(serial),
+  ])
   try {
     const res = await adb.shell(serial, 'getprop', { timeoutMs: 12_000 })
     for (const line of res.stdout.split(/\r?\n/)) {
@@ -122,11 +128,6 @@ async function gatherInfo(serial: string, state: string): Promise<DeviceInfo> {
   const androidVersion = firstProp(props, ['ro.build.version.release']) || 'Unknown'
   const sdkVersion = Number(props['ro.build.version.sdk'] || '') || null
   const cpu = firstProp(props, ['ro.product.cpu.abi']) || 'unknown'
-
-  const battery = await collectBattery(serial)
-  const mem = await collectMemory(serial)
-  const storage = await collectStorage(serial)
-  const ip = await collectIp(serial)
 
   const connected = state === 'device'
   const status: DeviceStatus = state === 'device' ? 'connected' : state === 'offline' ? 'offline' : state === 'unauthorized' ? 'unauthorized' : 'offline'
@@ -223,6 +224,38 @@ export function upsertStored(device: DeviceInfo) {
   }
 }
 
+export function storeConnectingDevice(serial: string, name?: string): DeviceInfo {
+  const existing = devices.get(serial)
+  const info: DeviceInfo = {
+    serial,
+    name: name || existing?.name || serial.split(':')[0] || serial,
+    manufacturer: existing?.manufacturer || 'Unknown',
+    model: existing?.model || name || serial.split(':')[0] || serial,
+    androidVersion: existing?.androidVersion || 'Unknown',
+    sdkVersion: existing?.sdkVersion ?? null,
+    buildFingerprint: existing?.buildFingerprint || '',
+    abi: existing?.abi || [],
+    cpu: existing?.cpu || 'unknown',
+    ramTotalBytes: existing?.ramTotalBytes || 0,
+    storageTotalBytes: existing?.storageTotalBytes || 0,
+    storageUsedBytes: existing?.storageUsedBytes || 0,
+    batteryPercent: existing?.batteryPercent ?? null,
+    batteryTempC: existing?.batteryTempC ?? null,
+    batteryStatus: existing?.batteryStatus || 'unknown',
+    ipAddress: existing?.ipAddress ?? (/:\d+$/.test(serial) ? serial.split(':')[0] ?? null : null),
+    connectionType: /:\d+$/.test(serial) ? 'wireless' : guessConnectionType(serial),
+    status: 'connecting',
+    authorized: false,
+    lastSeen: nowIso(),
+    lastConnected: existing?.lastConnected || nowIso(),
+    firstSeen: existing?.firstSeen || nowIso(),
+    product: existing?.product,
+  }
+  devices.set(serial, info)
+  bus.emit('device:update', serial, info)
+  return info
+}
+
 export function removeStored(serial: string) {
   devices.delete(serial)
   bus.emit('device:remove', serial)
@@ -258,10 +291,25 @@ export function stopDeviceMonitoring() {
 export async function connectDevice(serial: string, address?: string): Promise<DeviceInfo> {
   const target = address ?? (serial.includes(':') ? serial : undefined)
   if (target) {
+    storeConnectingDevice(serial)
     await adb.connectDevice(target)
   }
-  await refreshDevice(serial)
-  return requireDevice(serial)
+  try {
+    return await refreshDevice(serial)
+  } catch (err) {
+    const connecting = devices.get(serial)
+    if (connecting) {
+      connecting.status = 'offline'
+      bus.emit('device:update', serial, connecting)
+    }
+    throw err
+  }
+}
+
+export function refreshStoredDevice(serial: string) {
+  refreshDevice(serial).catch(() => {
+    /* device not yet visible to adb — keep the stored connecting record */
+  })
 }
 
 export async function disconnectDevice(serial: string) {
