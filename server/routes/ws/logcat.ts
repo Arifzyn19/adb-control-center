@@ -16,7 +16,7 @@ export default defineWebSocketHandler({
   upgrade(request) {
     const url = new URL(request.url)
     const token = url.searchParams.get('token') || undefined
-    const session = getSession(token)
+    const session = getAuthSession(token)
     if (!session) {
       throw new Response('Unauthorized', { status: 401 })
     }

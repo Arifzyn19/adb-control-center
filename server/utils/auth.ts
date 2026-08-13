@@ -29,7 +29,7 @@ export function createSession(ip?: string) {
   return { raw, token }
 }
 
-export function getSession(token?: string | null): Session | null {
+export function getAuthSession(token?: string | null): Session | null {
   if (!token) return null
   const session = sessions.get(hashToken(token))
   if (!session) return null
@@ -54,7 +54,7 @@ export function getBearerToken(event: H3Event): string | undefined {
 
 export function requireAuth(event: H3Event): Session {
   const token = getBearerToken(event)
-  const session = getSession(token)
+  const session = getAuthSession(token)
   if (!session) throw Errors.unauthorized()
   return session
 }

@@ -5,7 +5,7 @@ export default defineEventHandler((event) => {
   if (path === '/api/auth/login' || path === '/api/health') return
 
   const token = getBearerToken(event)
-  const session = getSession(token)
+  const session = getAuthSession(token)
   if (!session) {
     return assertApi(Errors.unauthorized())
   }
